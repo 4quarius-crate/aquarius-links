@@ -45,6 +45,7 @@
   @media (orientation:landscape){
     body{flex-direction:row;}
     .pinp{width:50%; height:auto;}
+    body.memo .pinp{width:0;}
     .col{overflow-y:auto; scrollbar-width:none;}
     .col::-webkit-scrollbar{display:none;}
   }
@@ -149,6 +150,32 @@
     padding-top:calc(env(safe-area-inset-top,0px) + 10px); padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
     padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); gap:10px;}
   .hist-full[hidden]{display:none;}
+
+  /* CZpt / メモ 切り替え */
+  .tabs{display:flex; gap:2px; padding:2px; background:var(--panel); border:1px solid var(--line); border-radius:9px;}
+  .tabs button{border:none; background:none; color:var(--dim); font-size:12.5px; font-weight:800; padding:6px 14px; border-radius:7px; cursor:pointer;}
+  .tabs button.on{background:var(--ember); color:#1e140c;}
+  .pinp{transition:height .2s ease, width .2s ease;}
+  body.memo .pinp{height:0;}
+  body.memo .mode, body.memo #undoBtn{visibility:hidden;}
+  .memo-view{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:6px;}
+  .memo-view[hidden]{display:none;}
+  .board[hidden]{display:none;}
+  .memo-view textarea{flex:1 1 auto; min-height:120px; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
+  .memo-view textarea:focus{outline:2px solid var(--ember); outline-offset:0;}
+  .memo-actions{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px;}
+  .memo-btn{line-height:1.25;}
+  .img-view{position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    padding:calc(env(safe-area-inset-top,0px) + 16px) max(16px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px, env(safe-area-inset-left,0px));}
+  .img-view[hidden]{display:none;}
+  .img-view img{max-width:100%; max-height:70dvh; border-radius:8px; -webkit-touch-callout:default; -webkit-user-select:auto; user-select:auto;}
+  .img-view p{margin:0; color:#fff6ec; font-size:13px; text-align:center;}
+  .img-view button{padding:10px 24px; border-radius:8px; border:1px solid #fff6ec; background:none; color:#fff6ec; font-size:14px; font-weight:700;}
+  .memo-btn{padding:11px 6px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:13px; font-weight:800; cursor:pointer;}
+  .memo-btn:active{background:var(--line);}
+  .memo-btn.primary{background:var(--ember); border-color:var(--ember); color:#1e140c;}
+  .memo-foot{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .memo-note{font-size:11px; color:var(--dim);}
   .hist-full .hf-head{display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding-bottom:8px;}
   .hist-full .hf-title{font-size:16px; font-weight:800;}
   .hist-full .hf-title b{color:var(--ember); font-variant-numeric:tabular-nums;}
@@ -190,7 +217,10 @@
 <div class="pinp" aria-hidden="true"></div>
 <div class="col">
 <div class="topbar">
-  <h1>カバネリ CZポイント帳</h1>
+  <div class="tabs" role="group" aria-label="表示切り替え">
+    <button id="tabCz" class="on" aria-pressed="true">CZpt</button>
+    <button id="tabMemo" aria-pressed="false">メモ</button>
+  </div>
   <div class="actions">
     <div class="mode"><span id="modeLabel">加算</span>
       <label class="switch"><input type="checkbox" id="minusToggle" aria-label="減算モード"><span class="slider"></span></label>
@@ -201,7 +231,20 @@
 </div>
 
 
-<div class="board">
+<div class="memo-view" id="memoView" hidden>
+  <textarea id="memoText" aria-label="メモ"></textarea>
+  <div class="memo-actions">
+    <button class="memo-btn primary" id="memoShare">メモアプリに送る</button>
+    <button class="memo-btn primary" id="memoImage">画像で写真に保存</button>
+    <button class="memo-btn" id="memoDownload">テキストで保存</button>
+  </div>
+  <div class="memo-foot">
+    <span class="memo-note" id="memoNote">自動で保存されます</span>
+    <button class="hist-clear" id="memoClear">メモを消す</button>
+  </div>
+</div>
+
+<div class="board" id="czView">
   <div class="tile mumei">
     <div class="head"><span class="who">無名pt</span></div>
     <button class="pad" id="pad_mumei" aria-label="無名ポイント"><span class="fill" id="fill_mumei"></span><span class="num" id="num_mumei">0</span><span class="max" id="max_mumei"></span><span class="unit" id="unit_mumei">無名チャンス目</span></button>
@@ -231,6 +274,12 @@
 </div>
 </div>
 
+<div class="img-view" id="imgView" hidden>
+  <img id="imgPreview" alt="メモの画像">
+  <p>画像を長押し →「写真に保存」で保存できます</p>
+  <button id="imgClose">閉じる</button>
+</div>
+
 <div class="hist-full" id="histFull" hidden role="dialog" aria-label="履歴">
   <div class="hf-head">
     <span class="hf-title">履歴 <b id="histCountFull">0</b>件</span>
@@ -252,7 +301,7 @@
 
   var state = { g:0, minus:false, mumei:0, ikoma:0, kurusu:0, hint_mumei:0, hint_ikoma:0, hint_kurusu:0, koukaku:false, shuki1:false,
     lastG_mumei:0, lastG_ikoma:0, hist:[], histOpen:false,
-    log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false };
+    log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false, memo:"", view:"cz" };
   var undo = [];
 
   function stepsHtml(carry, steps, name){
@@ -430,7 +479,7 @@
     snapshot();
     var hist = state.hist.slice();
     var minus = state.minus, histOpen = state.histOpen;
-    state = { g:0, minus:minus, mumei:0, ikoma:0, kurusu:0, hint_mumei:0, hint_ikoma:0, hint_kurusu:0, koukaku:false, shuki1:false, lastG_mumei:0, lastG_ikoma:0, hist:hist, histOpen:histOpen, log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false };
+    state = { g:0, minus:minus, mumei:0, ikoma:0, kurusu:0, hint_mumei:0, hint_ikoma:0, hint_kurusu:0, koukaku:false, shuki1:false, lastG_mumei:0, lastG_ikoma:0, hist:hist, histOpen:histOpen, log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false, memo:state.memo, view:state.view };
     render(); save();
   });
 
@@ -460,6 +509,133 @@
     else if(cur === "light") r.removeAttribute("data-theme");
     else r.setAttribute("data-theme","dark");
   });
+
+  // CZpt ↔ メモ の切り替え
+  function applyView(){
+    var memo = state.view === "memo";
+    document.body.classList.toggle("memo", memo);
+    $("memoView").hidden = !memo;
+    $("czView").hidden = memo;
+    $("tabCz").classList.toggle("on", !memo);
+    $("tabMemo").classList.toggle("on", memo);
+    $("tabCz").setAttribute("aria-pressed", String(!memo));
+    $("tabMemo").setAttribute("aria-pressed", String(memo));
+  }
+  $("memoText").value = state.memo || "";
+  $("tabMemo").addEventListener("click", function(){
+    state.view = "memo"; applyView(); save();
+    var t = $("memoText");
+    t.focus();
+    try{ var n = t.value.length; t.setSelectionRange(n, n); }catch(e){}
+  });
+  $("tabCz").addEventListener("click", function(){
+    $("memoText").blur();
+    state.view = "cz"; applyView(); save();
+    window.scrollTo(0, 0);
+  });
+  $("memoText").addEventListener("input", function(e){ state.memo = e.target.value; save(); });
+
+  // メモの書き出し
+  function memoTitle(){ var d = new Date(); return "カバネリ メモ " + (d.getMonth()+1) + "/" + d.getDate(); }
+  function memoBody(){ return $("memoText").value || ""; }
+
+  // メモを画像にする
+  function memoCanvas(){
+    var W = 1080, P = 72, FS = 46, LH = Math.round(FS * 1.6);
+    var font = FS + 'px "Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif';
+    var c = document.createElement("canvas"), x = c.getContext("2d");
+    x.font = font;
+    var lines = [];
+    memoBody().split("\n").forEach(function(par){
+      if(par === ""){ lines.push(""); return; }
+      var cur = "";
+      Array.from(par).forEach(function(ch){
+        if(x.measureText(cur + ch).width > W - P*2 && cur){ lines.push(cur); cur = ch; }
+        else cur += ch;
+      });
+      lines.push(cur);
+    });
+    var H = Math.max(W * 0.6, P*2 + lines.length * LH);
+    c.width = W; c.height = H;
+    x = c.getContext("2d");
+    x.fillStyle = "#1c1613"; x.fillRect(0, 0, W, H);
+    x.fillStyle = "#f0ab4a"; x.fillRect(0, 0, W, 10);
+    x.fillStyle = "#eee6d6"; x.font = font; x.textBaseline = "top";
+    lines.forEach(function(l, i){ x.fillText(l, P, P + i * LH + (LH - FS) / 2); });
+    return c;
+  }
+  $("imgClose").addEventListener("click", function(){ $("imgView").hidden = true; });
+  $("memoImage").addEventListener("click", function(){
+    if(!(memoBody()).trim()){ flashNote("メモが空です"); return; }
+    $("memoText").blur();
+    var c = memoCanvas();
+    var dataUrl = c.toDataURL("image/png");
+    function showPreview(){ $("imgPreview").src = dataUrl; $("imgView").hidden = false; }
+    // 共有画面はタップ直後でないと開けないので、画像データはその場で作る
+    try{
+      var bin = atob(dataUrl.split(",")[1]), arr = new Uint8Array(bin.length);
+      for(var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      var file = new File([arr], "kabaneri-memo.png", { type:"image/png" });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        navigator.share({ files:[file] }).catch(function(err){
+          if(err && err.name === "AbortError") return;
+          showPreview();
+        });
+        return;
+      }
+    }catch(e){}
+    showPreview();
+  });
+  var noteTimer = null;
+  function flashNote(msg){
+    $("memoNote").textContent = msg;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(function(){ $("memoNote").textContent = "自動で保存されます"; }, 4000);
+  }
+  function copyFallback(text){
+    function done(){ flashNote("コピーしました。メモアプリに貼り付けてください"); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ $("memoText").select(); flashNote("全部選択しました。コピーして貼り付けてください"); });
+    }else{ $("memoText").select(); flashNote("全部選択しました。コピーして貼り付けてください"); }
+  }
+  $("memoShare").addEventListener("click", function(){
+    if(!($("memoText").value || "").trim()){ flashNote("メモが空です"); return; }
+    var text = memoBody();
+    if(navigator.share){
+      navigator.share({ text: text }).catch(function(err){
+        if(err && err.name === "AbortError") return;
+        copyFallback(text);
+      });
+    }else{
+      copyFallback(text);
+    }
+  });
+  $("memoDownload").addEventListener("click", function(){
+    if(!($("memoText").value || "").trim()){ flashNote("メモが空です"); return; }
+    try{
+      var d = new Date();
+      var name = "kabaneri-memo-" + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) + "-" + pad2(d.getHours()) + pad2(d.getMinutes()) + ".txt";
+      var blob = new Blob(["﻿" + memoBody()], { type:"text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+      flashNote("保存しました（ファイルアプリの「ダウンロード」）");
+    }catch(e){ copyFallback(memoBody()); }
+  });
+  var memoClearTimer = null;
+  $("memoClear").addEventListener("click", function(){
+    var b = $("memoClear");
+    if(!b.classList.contains("danger")){
+      b.classList.add("danger"); b.textContent = "もう一度";
+      clearTimeout(memoClearTimer);
+      memoClearTimer = setTimeout(function(){ b.classList.remove("danger"); b.textContent = "メモを消す"; }, 3000);
+      return;
+    }
+    clearTimeout(memoClearTimer); b.classList.remove("danger"); b.textContent = "メモを消す";
+    state.memo = ""; $("memoText").value = ""; save();
+  });
+  applyView();
 
   render();
 })();
