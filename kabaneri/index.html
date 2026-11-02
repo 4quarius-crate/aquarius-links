@@ -25,6 +25,9 @@
 
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
+  /* ズーム無効化：ピンチとダブルタップ拡大を止める */
+  html{touch-action:pan-x pan-y; -webkit-text-size-adjust:100%; text-size-adjust:100%;}
+  button,.pad,input,label{touch-action:manipulation;}
   body{
     background:var(--bg); color:var(--text); font-family:var(--font-ui);
     display:flex; flex-direction:column; overflow:hidden;
@@ -384,6 +387,14 @@
     });
     render(); save();
   }
+
+  // iPhone Safariはビューポート指定だけではズームを止めないので、ジェスチャー自体を止める
+  ["gesturestart","gesturechange","gestureend"].forEach(function(ev){
+    document.addEventListener(ev, function(e){ e.preventDefault(); }, { passive:false });
+  });
+  document.addEventListener("touchmove", function(e){
+    if(e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive:false });
 
   load();
   ["mumei","ikoma"].forEach(function(k){
