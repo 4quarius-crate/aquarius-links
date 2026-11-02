@@ -158,10 +158,10 @@
   .pinp{transition:height .2s ease, width .2s ease;}
   body.memo .pinp{height:36px;}  /* 画面上端のぼかしにかからないよう少し下げる */
   body.memo .mode, body.memo #undoBtn{visibility:hidden;}
-  .memo-view{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:6px;}
+  .memo-view{flex:0 0 auto; min-height:0; display:flex; flex-direction:column; gap:6px; height:45dvh;}
   .memo-view[hidden]{display:none;}
   .board[hidden]{display:none;}
-  .memo-view textarea{flex:1 1 auto; min-height:120px; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
+  .memo-view textarea{flex:1 1 auto; min-height:60px; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
   .memo-view textarea:focus{outline:2px solid var(--ember); outline-offset:0;}
   .memo-actions{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px;}
   .memo-btn.primary.copied{background:var(--ikoma); border-color:var(--ikoma); color:var(--on-tile);}
@@ -512,6 +512,24 @@
   });
 
   // CZpt ↔ メモ の切り替え
+  // メモ欄は画面の上半分、キーボードにかからない高さに収める
+  function fitMemo(){
+    if(state.view !== "memo") return;
+    var mv = $("memoView");
+    var top = mv.getBoundingClientRect().top;
+    var vv = window.visualViewport;
+    var visibleBottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+    var half = window.innerHeight * 0.5;
+    var h = Math.min(visibleBottom, half) - top - 8;
+    mv.style.height = Math.max(140, Math.round(h)) + "px";
+  }
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize", fitMemo);
+    window.visualViewport.addEventListener("scroll", fitMemo);
+  }
+  window.addEventListener("resize", fitMemo);
+  window.addEventListener("orientationchange", function(){ setTimeout(fitMemo, 300); });
+
   function applyView(){
     var memo = state.view === "memo";
     document.body.classList.toggle("memo", memo);
@@ -521,6 +539,7 @@
     $("tabMemo").classList.toggle("on", memo);
     $("tabCz").setAttribute("aria-pressed", String(!memo));
     $("tabMemo").setAttribute("aria-pressed", String(memo));
+    if(memo){ fitMemo(); setTimeout(fitMemo, 250); setTimeout(fitMemo, 600); }
   }
   $("memoText").value = state.memo || "";
   $("tabMemo").addEventListener("click", function(){
