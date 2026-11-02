@@ -156,7 +156,7 @@
   .tabs button{border:none; background:none; color:var(--dim); font-size:12.5px; font-weight:800; padding:6px 14px; border-radius:7px; cursor:pointer;}
   .tabs button.on{background:var(--ember); color:#1e140c;}
   .pinp{transition:height .2s ease, width .2s ease;}
-  body.memo .pinp{height:0;}
+  body.memo .pinp{height:36px;}  /* 画面上端のぼかしにかからないよう少し下げる */
   body.memo .mode, body.memo #undoBtn{visibility:hidden;}
   .memo-view{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:6px;}
   .memo-view[hidden]{display:none;}
