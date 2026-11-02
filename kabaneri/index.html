@@ -163,7 +163,9 @@
   .board[hidden]{display:none;}
   .memo-view textarea{flex:1 1 auto; min-height:120px; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
   .memo-view textarea:focus{outline:2px solid var(--ember); outline-offset:0;}
-  .memo-actions{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px;}
+  .memo-actions{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px;}
+  .memo-btn.primary.copied{background:var(--ikoma); border-color:var(--ikoma); color:var(--on-tile);}
+  .memo-note.ok{color:var(--ikoma); font-weight:700;}
   .memo-btn{line-height:1.25;}
   .img-view{position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
     padding:calc(env(safe-area-inset-top,0px) + 16px) max(16px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 16px) max(16px, env(safe-area-inset-left,0px));}
@@ -234,9 +236,8 @@
 <div class="memo-view" id="memoView" hidden>
   <textarea id="memoText" aria-label="メモ"></textarea>
   <div class="memo-actions">
-    <button class="memo-btn primary" id="memoShare">メモアプリに送る</button>
+    <button class="memo-btn primary" id="memoShare">テキストをコピー</button>
     <button class="memo-btn primary" id="memoImage">画像で写真に保存</button>
-    <button class="memo-btn" id="memoDownload">テキストで保存</button>
   </div>
   <div class="memo-foot">
     <span class="memo-note" id="memoNote">自動で保存されます</span>
@@ -555,7 +556,7 @@
       });
       lines.push(cur);
     });
-    var H = Math.max(W * 0.6, P*2 + lines.length * LH);
+    var H = P*2 + (lines.length + 4) * LH;  // 最後の行の下に4行分の空白
     c.width = W; c.height = H;
     x = c.getContext("2d");
     x.fillStyle = "#1c1613"; x.fillRect(0, 0, W, H);
@@ -598,30 +599,36 @@
       navigator.clipboard.writeText(text).then(done, function(){ $("memoText").select(); flashNote("全部選択しました。コピーして貼り付けてください"); });
     }else{ $("memoText").select(); flashNote("全部選択しました。コピーして貼り付けてください"); }
   }
-  $("memoShare").addEventListener("click", function(){
-    if(!($("memoText").value || "").trim()){ flashNote("メモが空です"); return; }
-    var text = memoBody();
-    if(navigator.share){
-      navigator.share({ text: text }).catch(function(err){
-        if(err && err.name === "AbortError") return;
-        copyFallback(text);
-      });
-    }else{
-      copyFallback(text);
-    }
-  });
-  $("memoDownload").addEventListener("click", function(){
-    if(!($("memoText").value || "").trim()){ flashNote("メモが空です"); return; }
+  var copiedTimer = null;
+  function showCopied(){
+    var b = $("memoShare");
+    b.classList.add("copied"); b.textContent = "✓ コピーしました";
+    $("memoNote").classList.add("ok");
+    flashNote("コピーしました。メモアプリに貼り付けできます");
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(function(){
+      b.classList.remove("copied"); b.textContent = "テキストをコピー";
+      $("memoNote").classList.remove("ok");
+    }, 2500);
+  }
+  function legacyCopy(text){
+    var t = $("memoText");
     try{
-      var d = new Date();
-      var name = "kabaneri-memo-" + d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) + "-" + pad2(d.getHours()) + pad2(d.getMinutes()) + ".txt";
-      var blob = new Blob(["﻿" + memoBody()], { type:"text/plain;charset=utf-8" });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
-      flashNote("保存しました（ファイルアプリの「ダウンロード」）");
-    }catch(e){ copyFallback(memoBody()); }
+      t.focus(); t.setSelectionRange(0, t.value.length);
+      var ok = document.execCommand && document.execCommand("copy");
+      t.setSelectionRange(t.value.length, t.value.length); t.blur();
+      if(ok){ showCopied(); return; }
+    }catch(e){}
+    flashNote("コピーできませんでした。メモを長押ししてコピーしてください");
+  }
+  $("memoShare").addEventListener("click", function(){
+    var text = memoBody();
+    if(!text.trim()){ flashNote("メモが空です"); return; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(showCopied, function(){ legacyCopy(text); });
+    }else{
+      legacyCopy(text);
+    }
   });
   var memoClearTimer = null;
   $("memoClear").addEventListener("click", function(){
