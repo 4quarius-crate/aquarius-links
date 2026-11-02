@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#15110f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>カバネリ CZポイント帳</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}html,body{margin:0}[hidden]{display:none!important}</style>
+<style>
+  /* Layout: one-screen counter. G数 → 3 pt tiles → CZ当選ボタン → 履歴. Dark-first, 甲鉄城の鉄と錆. */
+  :root{
+    --bg:#15110f; --panel:#221b17; --panel-2:#2c231e; --line:#3d2f27;
+    --text:#eee6d6; --dim:#b9a98f; --ember:#f0ab4a; --rust:#9a3324;
+    --mumei:#c1503f; --ikoma:#5aa15a; --kurusu:#3f6fc1; --douran:#3f8fb0;
+    --on-tile:#fff6ec;
+    --font-ui:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;
+    color-scheme:dark;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --bg:#efe8da; --panel:#fbf6ea; --panel-2:#f3ead8; --line:#d8c9ab; --text:#241a14; --dim:#6a5848; --ember:#b06a12; color-scheme:light; }
+  }
+  :root[data-theme="light"]{ --bg:#efe8da; --panel:#fbf6ea; --panel-2:#f3ead8; --line:#d8c9ab; --text:#241a14; --dim:#6a5848; --ember:#b06a12; color-scheme:light; }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--font-ui);
+    display:flex; flex-direction:column; overflow:hidden;
+    padding-left:max(10px, env(safe-area-inset-left,0px));
+    padding-right:max(10px, env(safe-area-inset-right,0px));
+    padding-block:6px 8px;
+    -webkit-user-select:none; user-select:none;
+  }
+  /* PinP用の空白：縦は上部に16:9分、横は左半分 */
+  .pinp{flex:0 0 auto; height:min(56.25vw, 40dvh);}
+  .col{flex:1 1 auto; min-height:0; min-width:0; display:flex; flex-direction:column; gap:8px;}
+  @media (orientation:landscape){
+    body{flex-direction:row;}
+    .pinp{width:50%; height:auto;}
+    .col{overflow-y:auto; scrollbar-width:none;}
+    .col::-webkit-scrollbar{display:none;}
+  }
+  button{font-family:inherit;}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--ember); outline-offset:2px;}
+
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding-bottom:6px;}
+  .topbar h1{font-size:14px; margin:0; font-weight:800; letter-spacing:.02em;}
+  .actions{display:flex; align-items:center; gap:8px;}
+  .mode{display:flex; align-items:center; gap:5px; font-size:11px; color:var(--dim);}
+  .switch{position:relative; width:34px; height:19px; display:inline-block;}
+  .switch input{opacity:0; width:0; height:0;}
+  .switch .slider{position:absolute; inset:0; background:var(--line); border-radius:19px; transition:background .15s;}
+  .switch .slider::before{content:""; position:absolute; width:13px; height:13px; left:3px; top:3px; background:var(--text); border-radius:50%; transition:transform .15s;}
+  .switch input:checked + .slider{background:var(--rust);}
+  .switch input:checked + .slider::before{transform:translateX(15px);}
+  .icon-btn{min-width:28px; height:28px; padding:0 7px; border-radius:7px; border:1px solid var(--line); background:none; color:var(--dim); font-size:12px; cursor:pointer; white-space:nowrap;}
+  .icon-btn:active{background:var(--line);}
+  .icon-btn.danger{background:var(--rust); border-color:var(--rust); color:var(--on-tile);}
+
+  .g-row{display:flex; align-items:baseline; gap:8px;}
+  .g-row label{font-size:11px; color:var(--ember); letter-spacing:.06em;}
+  .g-row input{width:5ch; font:800 26px/1 var(--font-ui); background:transparent; border:none; outline:none; color:var(--text); padding:0; font-variant-numeric:tabular-nums;}
+  .g-row .unit{font-size:13px; color:var(--dim); font-weight:600;}
+  .g-row .hint{margin-left:auto; font-size:10px; color:var(--dim);}
+
+  /* 左：無名・生駒（タイル＋CZボタン）、右列：履歴 */
+  .board{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-template-rows:minmax(0, 1fr) auto auto auto; gap:8px;}
+  .board .hist{grid-column:3; grid-row:1 / 5;}
+  .board .span2{grid-column:1 / 3;}
+  .tile{display:flex; flex-direction:column; gap:4px; min-width:0; min-height:0;}
+  .tile .head{display:flex; align-items:baseline; justify-content:space-between; gap:4px;}
+  .tile .who{font-size:11px; font-weight:700; color:var(--dim);}
+  .tile .since{font-size:9.5px; color:var(--dim); font-variant-numeric:tabular-nums;}
+  .tile .pad{
+    flex:1 1 auto; min-height:70px; border:none; border-radius:12px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    color:var(--on-tile);
+  }
+  .tile .pad:active{filter:brightness(.82);}
+  .tile .pad .num{font-size:clamp(28px, 9vw, 52px); font-weight:800; line-height:1; font-variant-numeric:tabular-nums;}
+  .tile .pad .unit{font-size:10px; opacity:.85; letter-spacing:.08em;}
+  .tile .pad{position:relative; overflow:hidden;}
+  .tile .pad .fill{position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.28); transition:height .15s; pointer-events:none;}
+  .tile .pad .num,.tile .pad .unit,.tile .pad .max{position:relative;}
+  .tile .pad .max{font-size:11px; white-space:nowrap; font-weight:700; opacity:.9; font-variant-numeric:tabular-nums;}
+  .tile .pad.full{box-shadow:inset 0 0 0 3px var(--ember);}
+  .tile.mumei .pad{background:var(--mumei);}
+  .tile.ikoma .pad{background:var(--ikoma);}
+  .tile.kurusu .pad{background:var(--kurusu);}
+
+  .sub{display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px; align-items:stretch;}
+  .sub .step{width:100%; min-width:0; padding:9px 2px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--text); font:800 15px/1 var(--font-ui); cursor:pointer; font-variant-numeric:tabular-nums;}
+  .sub .step:active{background:var(--line);}
+  .sub .step.two{background:var(--ember); border-color:var(--ember); color:#1e140c;}
+  .sub .step.near{font-size:13px;}
+  .sub .step.near.on{background:var(--text); border-color:var(--text); color:var(--bg);}
+  .tile .pad.near{box-shadow:inset 0 0 0 4px var(--text);}
+  .tile .pad .nearmsg{position:relative; margin-top:4px; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px; background:var(--on-tile); color:#1e140c; white-space:nowrap;}
+  .tile .pad .nearmsg[hidden]{display:none;}
+  .hist-full .st.nearmk{background:var(--text); border-color:var(--text); color:var(--bg);}
+  .sub input{width:100%; min-width:0; font:700 12px var(--font-ui); text-align:center; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 2px; font-variant-numeric:tabular-nums;}
+  .sub.single{grid-template-columns:minmax(0,1fr);}
+  .chip{width:100%; min-width:0; font-size:11px; padding:5px 2px; overflow:hidden; text-overflow:ellipsis; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--dim); cursor:pointer; white-space:nowrap;}
+  .chip[data-lv="1"]{border-color:var(--ember); color:var(--ember);}
+  .chip[data-lv="2"]{background:var(--ember); border-color:var(--ember); color:#1e140c; font-weight:700;}
+
+  .cz-btn{border:none; border-radius:10px; padding:10px 4px; font-size:13px; font-weight:800; color:var(--on-tile); cursor:pointer;}
+  .cz-btn small{display:block; font-size:9px; font-weight:500; opacity:.85; margin-top:2px;}
+  .cz-btn:active{filter:brightness(.82);}
+  .cz-btn.mumei{background:var(--mumei);} .cz-btn.ikoma{background:var(--ikoma);} .cz-btn.douran{background:var(--douran);}
+  .cz-btn.wide{width:100%; padding:7px 4px; font-size:12px;}
+  .cz-btn.wide small{display:block; margin:1px 0 0;}
+  .cz-btn.allstar{background:var(--ember); color:#1e140c;}
+
+  .bulk{flex:0 0 auto; width:100%; padding:11px 8px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--dim); font-size:13px; font-weight:700; cursor:pointer;}
+  .bulk:active{background:var(--line);}
+  .bulk.danger{background:var(--rust); border-color:var(--rust); color:var(--on-tile);}
+
+  .hist{display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .hist-head{flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:4px; padding:6px 8px; border-bottom:1px solid var(--line);}
+  .hist-title{font-size:11px; font-weight:700; color:var(--dim); white-space:nowrap;}
+  .hist-title b{color:var(--text); font-variant-numeric:tabular-nums;}
+  .hist-clear{font-size:10px; padding:2px 6px; white-space:nowrap; border-radius:6px; border:1px solid var(--line); background:none; color:var(--dim); cursor:pointer;}
+  .hist-clear.danger{background:var(--rust); border-color:var(--rust); color:var(--on-tile);}
+  .hist ul{flex:1 1 auto; min-height:0; list-style:none; margin:0; padding:2px 8px; overflow-y:auto;}
+  .hist li{display:flex; flex-direction:column; gap:2px; padding:6px 0; border-top:1px solid var(--line); font-size:12px; font-variant-numeric:tabular-nums;}
+  .hist li:first-child{border-top:none;}
+  .hist .l1,.hist .l2{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 6px;}
+  .hist .when{color:var(--dim); font-size:10px;}
+  .hist .v{font-weight:700; white-space:nowrap;}
+  .hist .v.mumei{color:var(--mumei);} .hist .v.ikoma{color:var(--ikoma);} .hist .v.kurusu{color:var(--kurusu);}
+  .hist .v small{font-weight:600; font-size:10px; color:var(--ember);}
+  .hist .tag{font-size:10.5px; font-weight:800; padding:1px 6px; border-radius:4px; color:var(--on-tile); white-space:nowrap;}
+  .hist .tag.mumei{background:var(--mumei);} .hist .tag.ikoma{background:var(--ikoma);} .hist .tag.kurusu{background:var(--kurusu);} .hist .tag.douran{background:var(--douran);} .hist .tag.allstar{background:var(--ember); color:#1e140c;}
+  .hist .flag{font-size:10px; color:var(--ember); border:1px solid var(--ember); border-radius:4px; padding:0 4px;}
+  .hist .empty{display:block; color:var(--dim); font-size:11px; line-height:1.5;}
+  .board .hist{cursor:pointer;}
+
+  /* 履歴の全画面表示 */
+  .hist-full{position:fixed; inset:0; z-index:50; background:var(--bg); display:flex; flex-direction:column;
+    padding-top:calc(env(safe-area-inset-top,0px) + 10px); padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
+    padding-left:max(16px, env(safe-area-inset-left,0px)); padding-right:max(16px, env(safe-area-inset-right,0px)); gap:10px;}
+  .hist-full[hidden]{display:none;}
+  .hist-full .hf-head{display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding-bottom:8px;}
+  .hist-full .hf-title{font-size:16px; font-weight:800;}
+  .hist-full .hf-title b{color:var(--ember); font-variant-numeric:tabular-nums;}
+  .hist-full .hf-actions{display:flex; gap:8px;}
+  .hist-full .hf-close{font-size:14px; font-weight:700; padding:8px 16px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--text); cursor:pointer;}
+  .hist-full ul{flex:1 1 auto; min-height:0; overflow-y:auto; list-style:none; margin:0; padding:0; display:grid; grid-template-columns:minmax(0, 1fr); align-content:start; gap:8px;}
+  .hist-full .steps{display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:13px;}
+  .hist-full .steps .who{font-size:11px; font-weight:700; color:var(--dim); min-width:2.6em;}
+  .hist-full .st{padding:2px 7px; border-radius:5px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-weight:700; font-variant-numeric:tabular-nums;}
+  .hist-full .st.two{background:var(--ember); border-color:var(--ember); color:#1e140c;}
+  .hist-full .st.neg{color:var(--dim); text-decoration:line-through;}
+  .hist-full .st.carry{background:none; border-style:dashed; color:var(--dim); font-weight:600;}
+  .hist-full .st.none{background:none; border:none; color:var(--dim); font-weight:500; padding:0;}
+  .hist-full li{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; gap:6px; font-variant-numeric:tabular-nums;}
+  .hist-full .l1,.hist-full .l2{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 10px;}
+  .hist-full .tag{font-size:13px; font-weight:800; padding:2px 8px; border-radius:5px; color:var(--on-tile); white-space:nowrap;}
+  .hist-full .tag.mumei{background:var(--mumei);} .hist-full .tag.ikoma{background:var(--ikoma);} .hist-full .tag.kurusu{background:var(--kurusu);} .hist-full .tag.douran{background:var(--douran);} .hist-full .tag.allstar{background:var(--ember); color:#1e140c;}
+  .hist-full .v{font-size:20px; font-weight:800; white-space:nowrap;}
+  .hist-full .v.mumei{color:var(--mumei);} .hist-full .v.ikoma{color:var(--ikoma);} .hist-full .v.kurusu{color:var(--kurusu);}
+  .hist-full .no{font-size:11px; color:var(--dim); margin-left:auto;}
+  .hist-full .empty{grid-column:1 / -1; background:none; border:none; color:var(--dim); font-size:13px;}
+
+  @media (orientation:landscape) and (max-height:500px){
+    .board{min-height:200px;}
+    .tile .pad .num{font-size:30px;}
+  }
+  .states{display:flex; flex-wrap:wrap; gap:6px 18px; padding:2px 2px 0;}
+  .state-row{display:flex; align-items:center; gap:7px;}
+  .state-row .lbl{font-size:12px; font-weight:700; color:var(--dim);}
+  .state-row .note{font-size:10.5px; color:var(--dim);}
+  .state-row.on .lbl,.state-row.on .note{color:var(--ember);}
+  .state-row .switch input:checked + .slider{background:var(--ember);}
+  .tile .pad.boost{box-shadow:inset 0 0 0 3px var(--ember);}
+  .tile .pad .unit b{font-weight:800;}
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important;} }
+</style>
+</head>
+<body>
+<div class="pinp" aria-hidden="true"></div>
+<div class="col">
+<div class="topbar">
+  <h1>カバネリ CZポイント帳</h1>
+  <div class="actions">
+    <div class="mode"><span id="modeLabel">加算</span>
+      <label class="switch"><input type="checkbox" id="minusToggle" aria-label="減算モード"><span class="slider"></span></label>
+    </div>
+    <button class="icon-btn" id="undoBtn" title="ひとつ戻す">↶</button>
+    <button class="icon-btn" id="themeToggle" title="表示切替">🌓</button>
+  </div>
+</div>
+
+
+<div class="board">
+  <div class="tile mumei">
+    <div class="head"><span class="who">無名pt</span></div>
+    <button class="pad" id="pad_mumei" aria-label="無名ポイント"><span class="fill" id="fill_mumei"></span><span class="num" id="num_mumei">0</span><span class="max" id="max_mumei"></span><span class="unit" id="unit_mumei">無名チャンス目</span></button>
+    <div class="sub single">
+      <button class="step two" id="p2_mumei">+2</button>
+    </div>
+  </div>
+  <div class="tile ikoma">
+    <div class="head"><span class="who">生駒pt</span></div>
+    <button class="pad" id="pad_ikoma" aria-label="生駒ポイント"><span class="fill" id="fill_ikoma"></span><span class="num" id="num_ikoma">0</span><span class="max" id="max_ikoma"></span><span class="unit" id="unit_ikoma">生駒チャンス目</span></button>
+    <div class="sub single">
+      <button class="step two" id="p2_ikoma">+2</button>
+    </div>
+  </div>
+  <div class="hist">
+    <div class="hist-head">
+      <span class="hist-title">履歴 <b id="histCount">0</b></span>
+      <button class="hist-clear" id="histClear" hidden>消す</button>
+    </div>
+    <ul id="histList"></ul>
+  </div>
+  <button class="cz-btn mumei" id="cz_mumei">無名CZ</button>
+  <button class="cz-btn ikoma" id="cz_ikoma">生駒CZ</button>
+  <button class="cz-btn douran wide" id="cz_douran">銅藍CZ</button>
+  <button class="cz-btn allstar wide" id="cz_allstar">オールスター目</button>
+  <button class="bulk span2" id="resetAll">一括リセット</button>
+</div>
+</div>
+
+<div class="hist-full" id="histFull" hidden role="dialog" aria-label="履歴">
+  <div class="hf-head">
+    <span class="hf-title">履歴 <b id="histCountFull">0</b>件</span>
+    <div class="hf-actions">
+      <button class="hf-close" id="histFullClose">閉じる</button>
+    </div>
+  </div>
+  <ul id="histListFull"></ul>
+</div>
+
+<script>
+(function(){
+  var KEY = "kabaneri_czpt_v1";
+  function maxOf(k){ return 10; }
+  function clamp(v, k){ return Math.max(0, v); }
+  var CZ_SUB = 10;
+  var HINT_LABEL = ["なし","弱","強"];
+  var HINT_LABEL_KURUSU = HINT_LABEL;
+
+  var state = { g:0, minus:false, mumei:0, ikoma:0, kurusu:0, hint_mumei:0, hint_ikoma:0, hint_kurusu:0, koukaku:false, shuki1:false,
+    lastG_mumei:0, lastG_ikoma:0, hist:[], histOpen:false,
+    log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false };
+  var undo = [];
+
+  function stepsHtml(carry, steps, name){
+    var s = '<div class="steps">' + (name ? '<span class="who">' + name + '</span>' : "");
+    if(!Array.isArray(steps)) return s + '<span class="st none">記録なし</span></div>';
+    if(carry) s += '<span class="st carry">持越' + esc(carry) + '</span>';
+    steps.forEach(function(d){
+      if(d === "near"){ s += '<span class="st nearmk">近いよ</span>'; return; }
+      d = Number(d) || 0;
+      if(d > 0) s += '<span class="st' + (d >= 2 ? " two" : "") + '">+' + d + '</span>';
+      else s += '<span class="st neg">−' + (-d) + '</span>';
+    });
+    if(!carry && !steps.length) s += '<span class="st none">加算なし</span>';
+    return s + "</div>";
+  }
+  var HIST_MAX = 100;
+  var TYPE_NAME = { mumei:"無名CZ", ikoma:"生駒CZ", kurusu:"周期", douran:"銅藍", allstar:"オールスター" };
+  function pad2(n){ return (n < 10 ? "0" : "") + n; }
+  function fmtTime(ts){ var d = new Date(ts); return (d.getMonth()+1) + "/" + d.getDate() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+  function renderHist(){
+    var h = state.hist;
+    $("histCount").textContent = h.length;
+    $("histCountFull").textContent = h.length;
+    $("histClear").hidden = !h.length;
+    if(!h.length){
+      var empty = '<li class="empty">CZボタンを押すと、その時のptがここに残ります。</li>';
+      $("histList").innerHTML = empty;
+      $("histListFull").innerHTML = empty;
+      return;
+    }
+    var htmlFull = "";
+    var n = h.length;
+    var html = "";
+    h.slice().reverse().forEach(function(r){
+      function v(k, name){
+        return '<span class="v '+k+'">' + name + " " + esc(r[k]) + "</span>";
+      }
+      var body;
+      if(r.type){
+        var hint = r.hint ? " <small>" + HINT_LABEL[r.hint] + "</small>" : "";
+        body = '<span class="tag '+r.type+'">' + TYPE_NAME[r.type] + '</span>';
+      }else{
+        body = '<span class="tag" style="background:var(--line);color:var(--text)">リセット</span>';
+      }
+      var vals;
+      if(r.type === "douran" || r.type === "allstar" || !r.type){
+        vals = v("mumei","無名") + v("ikoma","生駒") + (r.type ? "" : v("kurusu","来栖"));
+      }else{
+        vals = '<span class="v '+r.type+'">' + esc(r.pt) + "pt</span>";
+      }
+      html += "<li>" +
+        '<div class="l1">' + body + "</div>" +
+        '<div class="l2">' + vals +
+        "</div></li>";
+      var steps;
+      if(r.type === "douran" || r.type === "allstar"){
+        steps = stepsHtml(r.carry_mumei, r.steps_mumei, "無名") + stepsHtml(r.carry_ikoma, r.steps_ikoma, "生駒");
+      }else if(r.type === "mumei" || r.type === "ikoma"){
+        steps = stepsHtml(r.carry, r.steps, "");
+      }else{
+        steps = "";
+      }
+      htmlFull += "<li>" +
+        '<div class="l1">' + body + '<span class="no">' + (n--) + "回目</span></div>" +
+        '<div class="l2">' + vals + "</div>" + steps + "</li>";
+    });
+    $("histList").innerHTML = html;
+    $("histListFull").innerHTML = htmlFull;
+  }
+
+  function load(){
+    try{
+      var p = JSON.parse(localStorage.getItem(KEY) || "null");
+      if(p) Object.keys(state).forEach(function(k){
+        if(k === "hist"){ if(Array.isArray(p.hist)) state.hist = p.hist; }
+        else if(typeof p[k] === typeof state[k]) state[k] = p[k];
+      });
+      if(p && !("carry_mumei" in p)){ state.carry_mumei = state.mumei; state.carry_ikoma = state.ikoma; }
+      ["log_mumei","log_ikoma"].forEach(function(k){ if(!Array.isArray(state[k])) state[k] = []; });
+    }catch(e){}
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+  function snapshot(){ undo.push(JSON.stringify(state)); if(undo.length > 40) undo.shift(); }
+  var $ = function(id){ return document.getElementById(id); };
+
+  function render(){
+    ["mumei","ikoma"].forEach(function(k){
+      var MAX = maxOf(k);
+      state[k] = clamp(state[k], k);
+      $("num_"+k).textContent = state[k];
+      $("max_"+k).textContent = state[k] >= MAX ? "規定" + MAX + "到達" : ("規定まであと" + (MAX - state[k]));
+      $("fill_"+k).style.height = (Math.min(state[k], MAX) / MAX * 100) + "%";
+      $("pad_"+k).classList.toggle("full", state[k] >= MAX);
+      $("p2_"+k).textContent = state.minus ? "−2" : "+2";
+    });
+    $("minusToggle").checked = state.minus;
+    $("modeLabel").textContent = state.minus ? "減算" : "加算";
+    $("undoBtn").disabled = !undo.length;
+    $("undoBtn").style.opacity = undo.length ? 1 : .4;
+    renderHist();
+  }
+
+  function bump(k, step){
+    snapshot();
+    step = step || 1;
+    var next = clamp(state[k] + (state.minus ? -step : step), k);
+    if(next === state[k]){ undo.pop(); return; }
+    if(!Array.isArray(state["log_"+k])) state["log_"+k] = [];
+    state["log_"+k] = state["log_"+k].concat([next - state[k]]);
+    state[k] = next;
+    if(navigator.vibrate) try{ navigator.vibrate(8); }catch(e){}
+    render(); save();
+  }
+
+  function hitCZ(type, wasShuki1){
+    snapshot();
+    var rec = { t:Date.now(), type:type, koukaku:state.koukaku, shuki1:!!wasShuki1 };
+    var both = type === "douran" || type === "allstar";
+    function logOf(k){ return Array.isArray(state["log_"+k]) ? state["log_"+k].slice() : []; }
+    if(both){
+      rec.mumei = state.mumei; rec.ikoma = state.ikoma;
+      rec.steps_mumei = logOf("mumei"); rec.steps_ikoma = logOf("ikoma");
+      rec.carry_mumei = state.carry_mumei || 0; rec.carry_ikoma = state.carry_ikoma || 0;
+    }else{
+      rec.pt = state[type]; rec.steps = logOf(type); rec.carry = state["carry_"+type] || 0;
+    }
+    state.hist = state.hist.concat([rec]);
+    if(state.hist.length > HIST_MAX) state.hist = state.hist.slice(-HIST_MAX);
+    var targets = both ? ["mumei","ikoma"] : [type];
+    targets.forEach(function(k){
+      state[k] = type === "allstar" ? 0 : Math.max(0, state[k] - CZ_SUB);
+      state["log_"+k] = []; state["carry_"+k] = state[k]; state["near_"+k] = false;
+    });
+    render(); save();
+  }
+
+  load();
+  ["mumei","ikoma"].forEach(function(k){
+    $("pad_"+k).addEventListener("click", function(){ bump(k, 1); });
+
+    $("p2_"+k).addEventListener("click", function(){ bump(k, 2); });
+  });
+  $("cz_mumei").addEventListener("click", function(){ hitCZ("mumei"); });
+  $("cz_ikoma").addEventListener("click", function(){ hitCZ("ikoma"); });
+  $("cz_douran").addEventListener("click", function(){ hitCZ("douran"); });
+  $("cz_allstar").addEventListener("click", function(){ hitCZ("allstar"); });
+
+  $("minusToggle").addEventListener("change", function(e){ state.minus = e.target.checked; render(); save(); });
+  $("undoBtn").addEventListener("click", function(){
+    if(!undo.length) return;
+    try{ state = JSON.parse(undo.pop()); }catch(e){}
+    render(); save();
+  });
+
+  var resetTimer = null;
+  $("resetAll").addEventListener("click", function(){
+    var b = $("resetAll");
+    if(!b.classList.contains("danger")){
+      b.classList.add("danger"); b.textContent = "もう一度押すと全部0にします";
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(function(){ b.classList.remove("danger"); b.textContent = "一括リセット"; }, 3000);
+      return;
+    }
+    clearTimeout(resetTimer); b.classList.remove("danger"); b.textContent = "一括リセット";
+    snapshot();
+    var hist = state.hist.slice();
+    var minus = state.minus, histOpen = state.histOpen;
+    state = { g:0, minus:minus, mumei:0, ikoma:0, kurusu:0, hint_mumei:0, hint_ikoma:0, hint_kurusu:0, koukaku:false, shuki1:false, lastG_mumei:0, lastG_ikoma:0, hist:hist, histOpen:histOpen, log_mumei:[], log_ikoma:[], carry_mumei:0, carry_ikoma:0, near_mumei:false, near_ikoma:false };
+    render(); save();
+  });
+
+  document.querySelector(".board .hist").addEventListener("click", function(e){
+    if(e.target.closest("#histClear")) return;
+    $("histFull").hidden = false;
+    $("histListFull").scrollTop = 0;
+  });
+  $("histFullClose").addEventListener("click", function(){ $("histFull").hidden = true; });
+  document.addEventListener("keydown", function(e){ if(e.key === "Escape") $("histFull").hidden = true; });
+  var histClearTimer = null;
+  $("histClear").addEventListener("click", function(){
+    var b = $("histClear");
+    if(!b.classList.contains("danger")){
+      b.classList.add("danger"); b.textContent = "もう一度";
+      clearTimeout(histClearTimer);
+      histClearTimer = setTimeout(function(){ b.classList.remove("danger"); b.textContent = "消す"; }, 3000);
+      return;
+    }
+    clearTimeout(histClearTimer); b.classList.remove("danger"); b.textContent = "消す";
+    snapshot(); state.hist = []; render(); save();
+  });
+
+  $("themeToggle").addEventListener("click", function(){
+    var r = document.documentElement, cur = r.getAttribute("data-theme");
+    if(cur === "dark") r.setAttribute("data-theme","light");
+    else if(cur === "light") r.removeAttribute("data-theme");
+    else r.setAttribute("data-theme","dark");
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
