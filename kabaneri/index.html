@@ -27,7 +27,9 @@
   :root[data-theme="light"]{ --bg:#efe8da; --panel:#fbf6ea; --panel-2:#f3ead8; --line:#d8c9ab; --text:#241a14; --dim:#6a5848; --ember:#b06a12; color-scheme:light; }
 
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
+  html,body{height:100%; overscroll-behavior:none;}
+  /* ページ自体は動かさない（スクロールできるのはメモ欄と履歴だけ） */
+  html{overflow:hidden;}
   /* ズーム無効化：ピンチとダブルタップ拡大を止める */
   html{touch-action:pan-x pan-y; -webkit-text-size-adjust:100%; text-size-adjust:100%;}
   button,.pad,input,label{touch-action:manipulation;}
@@ -155,13 +157,13 @@
   .tabs{display:flex; gap:2px; padding:2px; background:var(--panel); border:1px solid var(--line); border-radius:9px;}
   .tabs button{border:none; background:none; color:var(--dim); font-size:12.5px; font-weight:800; padding:6px 14px; border-radius:7px; cursor:pointer;}
   .tabs button.on{background:var(--ember); color:#1e140c;}
-  .pinp{transition:height .2s ease, width .2s ease;}
+  .pinp{flex:0 0 auto;}
   body.memo .pinp{height:36px;}  /* 画面上端のぼかしにかからないよう少し下げる */
   body.memo .mode, body.memo #undoBtn{visibility:hidden;}
   .memo-view{flex:0 0 auto; min-height:0; display:flex; flex-direction:column; gap:6px; height:45dvh;}
   .memo-view[hidden]{display:none;}
   .board[hidden]{display:none;}
-  .memo-view textarea{flex:1 1 auto; min-height:60px; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
+  .memo-view textarea{flex:1 1 auto; min-height:60px; overscroll-behavior:contain; touch-action:pan-y; width:100%; resize:none; font:16px/1.6 var(--font-ui); color:var(--text); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; -webkit-user-select:text; user-select:text;}
   .memo-view textarea:focus{outline:2px solid var(--ember); outline-offset:0;}
   .memo-actions{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px;}
   .memo-btn.primary.copied{background:var(--ikoma); border-color:var(--ikoma); color:var(--on-tile);}
@@ -446,8 +448,18 @@
     document.addEventListener(ev, function(e){ e.preventDefault(); }, { passive:false });
   });
   document.addEventListener("touchmove", function(e){
-    if(e.touches && e.touches.length > 1) e.preventDefault();
+    if(e.touches && e.touches.length > 1){ e.preventDefault(); return; }
+    // メモ画面ではメモ欄以外をスクロールさせない
+    if(document.body.classList.contains("memo") && !(e.target.closest && e.target.closest("textarea"))) e.preventDefault();
   }, { passive:false });
+  // キーボードが出たときにページがずれたら元の位置に戻す
+  function pinTop(){
+    var vvTop = window.visualViewport ? window.visualViewport.offsetTop : 0;
+    if(window.scrollY || vvTop || document.documentElement.scrollTop || document.body.scrollTop){
+      window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+    }
+  }
+  window.addEventListener("scroll", pinTop, { passive:true });
 
   load();
   ["mumei","ikoma"].forEach(function(k){
@@ -517,8 +529,9 @@
     if(state.view !== "memo") return;
     var mv = $("memoView");
     var top = mv.getBoundingClientRect().top;
+    pinTop();
     var vv = window.visualViewport;
-    var visibleBottom = vv ? vv.height + vv.offsetTop : window.innerHeight;
+    var visibleBottom = vv ? vv.height : window.innerHeight;
     var half = window.innerHeight * 0.5;
     var h = Math.min(visibleBottom, half) - top - 8;
     mv.style.height = Math.max(140, Math.round(h)) + "px";
@@ -545,8 +558,10 @@
   $("tabMemo").addEventListener("click", function(){
     state.view = "memo"; applyView(); save();
     var t = $("memoText");
-    t.focus();
+    try{ t.focus({ preventScroll:true }); }catch(e){ t.focus(); }
     try{ var n = t.value.length; t.setSelectionRange(n, n); }catch(e){}
+    pinTop();
+    setTimeout(pinTop, 50); setTimeout(pinTop, 300);
   });
   $("tabCz").addEventListener("click", function(){
     $("memoText").blur();
