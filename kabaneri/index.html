@@ -11,6 +11,13 @@
 <link rel="icon" type="image/png" href="apple-touch-icon.png">
 <title>カバネリ CZポイント帳</title>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box}html,body{margin:0}[hidden]{display:none!important}</style>
+<!--
+  カバネリ CZポイント帳
+  Copyright (c) 2026 アクエリ All rights reserved.
+  個人で使うのは自由です。コード・デザインの無断転載・再配布・販売・改変しての公開は禁止します。
+  詳しくは同じフォルダの LICENSE.txt を読んでください。
+-->
+
 <style>
   /* Layout: one-screen counter. G数 → 3 pt tiles → CZ当選ボタン → 履歴. Dark-first, 甲鉄城の鉄と錆. */
   :root{
@@ -75,8 +82,8 @@
   .g-row .hint{margin-left:auto; font-size:10px; color:var(--dim);}
 
   /* 左：無名・生駒（タイル＋CZボタン）、右列：履歴 */
-  .board{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-template-rows:minmax(0, 1fr) auto auto auto; gap:8px;}
-  .board .hist{grid-column:3; grid-row:1 / 5;}
+  .board{flex:1 1 auto; min-height:0; display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-template-rows:minmax(0, 1fr) auto auto auto auto; gap:8px;}
+  .board .hist{grid-column:3; grid-row:1 / 6;}
   .board .span2{grid-column:1 / 3;}
   .tile{display:flex; flex-direction:column; gap:4px; min-width:0; min-height:0;}
   .tile .head{display:flex; align-items:baseline; justify-content:space-between; gap:4px;}
@@ -178,6 +185,8 @@
   .memo-btn{padding:11px 6px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:13px; font-weight:800; cursor:pointer;}
   .memo-btn:active{background:var(--line);}
   .memo-btn.primary{background:var(--ember); border-color:var(--ember); color:#1e140c;}
+  .credit{flex:0 0 auto; margin:0; font-size:9.5px; color:var(--dim); text-align:center; opacity:.8; letter-spacing:.02em;}
+  body.memo .credit{margin-top:auto;}
   .memo-foot{display:flex; align-items:center; justify-content:space-between; gap:8px;}
   .memo-note{font-size:11px; color:var(--dim);}
   .hist-full .hf-head{display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding-bottom:8px;}
@@ -271,10 +280,12 @@
   </div>
   <button class="cz-btn mumei" id="cz_mumei">無名CZ</button>
   <button class="cz-btn ikoma" id="cz_ikoma">生駒CZ</button>
-  <button class="cz-btn douran wide" id="cz_douran">銅藍CZ</button>
-  <button class="cz-btn allstar wide" id="cz_allstar">オールスター目</button>
+  <button class="cz-btn douran wide" id="cz_douran_mumei">銅藍（無名）</button>
+  <button class="cz-btn douran wide" id="cz_douran_ikoma">銅藍（生駒）</button>
+  <button class="cz-btn allstar wide span2" id="cz_allstar">オールスター目</button>
   <button class="bulk span2" id="resetAll">一括リセット</button>
 </div>
+<p class="credit">© 2026 アクエリ ・ 無断転載・再配布禁止 ・ 非公式ツール</p>
 </div>
 
 <div class="img-view" id="imgView" hidden>
@@ -321,7 +332,10 @@
     return s + "</div>";
   }
   var HIST_MAX = 100;
-  var TYPE_NAME = { mumei:"無名CZ", ikoma:"生駒CZ", kurusu:"周期", douran:"銅藍", allstar:"オールスター" };
+  var TYPE_NAME = { mumei:"無名CZ", ikoma:"生駒CZ", kurusu:"周期", douran:"銅藍", allstar:"オールスター",
+    douran_mumei:"銅藍（無名）", douran_ikoma:"銅藍（生駒）" };
+  function keyOf(type){ type = type || ""; return type.indexOf("douran_") === 0 ? type.slice(7) : type; }
+  function tagClass(type){ type = type || ""; return type.indexOf("douran") === 0 ? "douran" : type; }
   function pad2(n){ return (n < 10 ? "0" : "") + n; }
   function fmtTime(ts){ var d = new Date(ts); return (d.getMonth()+1) + "/" + d.getDate() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
@@ -347,7 +361,7 @@
       var body;
       if(r.type){
         var hint = r.hint ? " <small>" + HINT_LABEL[r.hint] + "</small>" : "";
-        body = '<span class="tag '+r.type+'">' + TYPE_NAME[r.type] + '</span>';
+        body = '<span class="tag '+tagClass(r.type)+'">' + TYPE_NAME[r.type] + '</span>';
       }else{
         body = '<span class="tag" style="background:var(--line);color:var(--text)">リセット</span>';
       }
@@ -355,7 +369,7 @@
       if(r.type === "douran" || r.type === "allstar" || !r.type){
         vals = v("mumei","無名") + v("ikoma","生駒") + (r.type ? "" : v("kurusu","来栖"));
       }else{
-        vals = '<span class="v '+r.type+'">' + esc(r.pt) + "pt</span>";
+        vals = '<span class="v '+keyOf(r.type)+'">' + esc(r.pt) + "pt</span>";
       }
       html += "<li>" +
         '<div class="l1">' + body + "</div>" +
@@ -364,7 +378,7 @@
       var steps;
       if(r.type === "douran" || r.type === "allstar"){
         steps = stepsHtml(r.carry_mumei, r.steps_mumei, "無名") + stepsHtml(r.carry_ikoma, r.steps_ikoma, "生駒");
-      }else if(r.type === "mumei" || r.type === "ikoma"){
+      }else if(keyOf(r.type) === "mumei" || keyOf(r.type) === "ikoma"){
         steps = stepsHtml(r.carry, r.steps, "");
       }else{
         steps = "";
@@ -431,11 +445,12 @@
       rec.steps_mumei = logOf("mumei"); rec.steps_ikoma = logOf("ikoma");
       rec.carry_mumei = state.carry_mumei || 0; rec.carry_ikoma = state.carry_ikoma || 0;
     }else{
-      rec.pt = state[type]; rec.steps = logOf(type); rec.carry = state["carry_"+type] || 0;
+      var kk = keyOf(type);
+      rec.pt = state[kk]; rec.steps = logOf(kk); rec.carry = state["carry_"+kk] || 0;
     }
     state.hist = state.hist.concat([rec]);
     if(state.hist.length > HIST_MAX) state.hist = state.hist.slice(-HIST_MAX);
-    var targets = both ? ["mumei","ikoma"] : [type];
+    var targets = both ? ["mumei","ikoma"] : [keyOf(type)];
     targets.forEach(function(k){
       state[k] = type === "allstar" ? 0 : Math.max(0, state[k] - CZ_SUB);
       state["log_"+k] = []; state["carry_"+k] = state[k]; state["near_"+k] = false;
@@ -469,7 +484,8 @@
   });
   $("cz_mumei").addEventListener("click", function(){ hitCZ("mumei"); });
   $("cz_ikoma").addEventListener("click", function(){ hitCZ("ikoma"); });
-  $("cz_douran").addEventListener("click", function(){ hitCZ("douran"); });
+  $("cz_douran_mumei").addEventListener("click", function(){ hitCZ("douran_mumei"); });
+  $("cz_douran_ikoma").addEventListener("click", function(){ hitCZ("douran_ikoma"); });
   $("cz_allstar").addEventListener("click", function(){ hitCZ("allstar"); });
 
   $("minusToggle").addEventListener("change", function(e){ state.minus = e.target.checked; render(); save(); });
